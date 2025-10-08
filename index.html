@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,344 +12,493 @@
 			background: #f5f5f5;
 		}
 		#map { width: 100%; height: 100%; transition: opacity 0.3s; }
-		.hidden-map { opacity: 0; pointer-events: none; }
+		.hidden-map { opacity: 0; pointer-events: none; }#panel {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		background: rgba(255,255,255,0.95);
+		padding: 10px;
+		border-radius: 10px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+		max-height: 85vh;
+		overflow-y: auto;
+		width: 340px;
+		font-family: sans-serif;
+		z-index: 1000;
+	}
 
-		#panel {
-			position: absolute;
-			top: 10px;
-			right: 10px;
-			background: rgba(255,255,255,0.95);
-			padding: 10px;
-			border-radius: 10px;
-			box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-			max-height: 85vh;
-			overflow-y: auto;
-			width: 340px;
-			font-family: sans-serif;
-			z-index: 1000;
-		}
-		button {
-			margin: 3px 2px;
-			padding: 5px 8px;
-			font-size: 0.85em;
-			cursor: pointer;
-		}
-		input, select {
-			width: 100%;
-			margin-bottom: 6px;
-			padding: 4px;
-			font-size: 0.9em;
-		}
-		.legend {
-			margin-top: 10px;
-			padding: 8px;
-			background: #fafafa;
-			border-radius: 6px;
-			font-size: 0.85em;
-			border: 1px solid #ddd;
-		}
-		.distance-label div {
-			background: white;
-			padding: 3px 5px;
-			border: 1px solid #000;
-			border-radius: 4px;
-			font-size: 11px;
-			line-height: 1.2em;
-			text-align: center;
-			white-space: nowrap;
-			display: inline-block;
-  		opacity: 70%;
-		}
-		#tapPanel {
-			position: absolute;
-			bottom: 10px;
-			left: 50%;
-			transform: translateX(-50%);
-			background: rgba(255,255,255,0.9);
-			padding: 8px 12px;
-			border-radius: 8px;
-			box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-			display: none;
-			z-index: 2000;
-			font-family: sans-serif;
-		}
-	</style>
+	/* minimized modes */
+	#panel.panel-main {
+		width: 260px;
+	}
+	#panel.panel-hamburger {
+		display: none;
+	}
+	#hamburgerBtn {
+		display: none;
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		width: 44px;
+		height: 44px;
+		border-radius: 22px;
+		background: rgba(255,255,255,0.95);
+		box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+		z-index: 1100;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		font-size: 18px;
+	}
+	#hamburgerBtn.show { display: flex; }
+
+	button {
+		margin: 3px 2px;
+		padding: 5px 8px;
+		font-size: 0.85em;
+		cursor: pointer;
+	}
+	input, select {
+		width: 100%;
+		margin-bottom: 6px;
+		padding: 4px;
+		font-size: 0.9em;
+	}
+	.legend {
+		margin-top: 10px;
+		padding: 8px;
+		background: #fafafa;
+		border-radius: 6px;
+		font-size: 0.85em;
+		border: 1px solid #ddd;
+	}
+	.distance-label div {
+		background: white;
+		padding: 3px 5px;
+		border: 1px solid #000;
+		border-radius: 4px;
+		font-size: 11px;
+		line-height: 1.2em;
+		text-align: center;
+		white-space: nowrap;
+		display: inline-block;
+		opacity: 0.85;
+	}
+	#tapPanel {
+		position: absolute;
+		bottom: 10px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(255,255,255,0.9);
+		padding: 8px 12px;
+		border-radius: 8px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+		display: none;
+		z-index: 2000;
+		font-family: sans-serif;
+	}
+
+	/* small print view */
+	#printView { position: absolute; left: 10px; top: 10px; background: white; padding: 12px; z-index:1500; max-height: 80vh; overflow:auto; display:none; width: 320px; border-radius:8px; box-shadow: 0 2px 8px rgba(0,0,0,.2);} 
+	.print-mode #printView { display:block; }
+</style>
+
 </head>
 <body>
-	<div id="panel">
-		<h2>Route Visualizer</h2>
+	<div id="panel" class="panel-full">
+		<h2>Route Visualizer</h2><h3>Controls</h3>
+	<input id="scaleInput" placeholder="Scale (e.g. 100 for 1cm = 100m)" />
+	<button onclick="updateScale()">Set Scale</button>
+	<button onclick="toggleMap()">Hide/Show Map</button>
+	<button onclick="showPrint()">Prepare Print</button>
 
-		<h3>Controls</h3>
-		<input id="scaleInput" placeholder="Scale (e.g. 100 for 1cm=100m)" />
-		<button onclick="updateScale()">Set Scale</button>
-		<button onclick="toggleMap()">Hide/Show Map</button>
-		<button onclick="showPrint()">Prepare Print</button>
+	<h3>Visibility</h3>
+	<button onclick="toggleVisibility('background')">Toggle Background</button>
+	<button onclick="toggleVisibility('lines')">Toggle Lines</button>
+	<button onclick="toggleVisibility('labels')">Toggle Labels</button>
+	<button onclick="toggleVisibility('markers')">Toggle Markers</button>
 
-		<h3>Visibility</h3>
-		<button onclick="toggleVisibility('background')">Toggle Background</button>
-		<button onclick="toggleVisibility('lines')">Toggle Lines</button>
-		<button onclick="toggleVisibility('labels')">Toggle Labels</button>
-		<button onclick="toggleVisibility('markers')">Toggle Markers</button>
+	<h3>Marker Style</h3>
+	<select id="markerStyle" onchange="renderAll()">
+		<option value="circle">Circle</option>
+		<option value="dot">Dot</option>
+		<option value="pin">Pin</option>
+	</select>
 
-		<h3>Marker Style</h3>
-		<select id="markerStyle" onchange="renderAll()">
-			<option value="circle">Circle</option>
-			<option value="dot">Dot</option>
-			<option value="pin">Pin</option>
-		</select>
+	<hr>
+	<h3>Manual Plot</h3>
+	<input id="labelInput" placeholder="Label (e.g. A)" />
+	<input id="latInput" placeholder="Latitude" />
+	<input id="lonInput" placeholder="Longitude" />
+	<button onclick="addPoint()">Plot Point</button>
+	<button onclick="startTapPlot()">Tap-to-Plot Mode</button>
+	<button onclick="resetAll()">Reset All</button>
 
-		<hr>
-		<h3>Manual Plot</h3>
-		<input id="labelInput" placeholder="Label (e.g. A)" />
-		<input id="latInput" placeholder="Latitude" />
-		<input id="lonInput" placeholder="Longitude" />
-		<button onclick="addPoint()">Plot Point</button>
-		<button onclick="startTapPlot()">Tap-to-Plot Mode</button>
-		<button onclick="resetAll()">Reset All</button>
+	<hr>
+	<div id="infoList"></div>
 
-		<hr>
-		<div id="infoList"></div>
-
-		<div class="legend">
-			<b>Legend:</b><br>
-			Blue line – Path<br>
-			Red dashed – Resultant<br>
-			Labels show when clicked (except closure)
-		</div>
+	<div class="legend">
+		<b>Legend:</b><br>
+		Blue line – Path<br>
+		Red dashed – Resultant<br>
+		Labels show on click. Double-click a line to set a custom scale for that segment.
 	</div>
 
-	<div id="map"></div>
-	<div id="printView"></div>
+	<hr>
+	<button onclick="cycleMinimizeMode()">Minimize Mode</button>
+</div>
 
-	<!-- Tap Plot Control -->
-	<div id="tapPanel">
-		<button onclick="finishTapPlot()">✅ Done</button>
-		<button onclick="cancelTapPlot()">❌ Cancel</button>
-	</div>
+<div id="hamburgerBtn" title="Open panel">☰</div>
 
-	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-	<script>
-		const STORAGE_KEY = "routeVisualizerPoints";
-		let SCALE = 100;
-		let points = [];
-		let markers = [], lines = [], labels = [];
-		let showBackground = true, showLines = true, showLabels = true, showMarkers = true;
-		let tapMode = false;
-		let mapLayer;
+<div id="map"></div>
+<div id="printView"></div>
 
-		const map = L.map('map');
-		mapLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+<!-- Tap Plot Control -->
+<div id="tapPanel">
+	<button onclick="finishTapPlot()">✅ Done</button>
+	<button onclick="cancelTapPlot()">❌ Cancel</button>
+</div>
 
-		const saved = localStorage.getItem(STORAGE_KEY);
-		points = saved ? JSON.parse(saved) : [];
-		renderAll();
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+	const STORAGE_KEY = "routeVisualizerPointsV2";
+	let SCALE = 100; // 1cm = SCALE meters
+	let points = [];
+	let markers = [], lines = [], labels = [], pointLabels = [];
+	let showBackground = true, showLines = true, showLabels = false, showMarkers = true;
+	let tapMode = false;
+	let mapLayer;
+	let lineScales = {}; // per-line custom scales keyed by "i-j"
+	let minimizeMode = 0; // 0 = full, 1 = main, 2 = hamburger
 
-		// ======================
-		function renderAll() {
-			clearMap();
-			let latlngs = [];
-			const style = document.getElementById("markerStyle").value;
+	const map = L.map('map');
+	mapLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-			points.forEach(([lat, lon, name]) => {
-				if (showMarkers) {
-					let marker;
-					if (style === "circle") {
-						marker = L.circleMarker([lat, lon], { radius: 6, color: 'blue', fillColor: 'cyan', fillOpacity: 0.8 });
-					} else if (style === "dot") {
-						marker = L.circleMarker([lat, lon], { radius: 3, color: 'black', fillColor: 'black', fillOpacity: 1 });
-					} else {
-						const icon = L.divIcon({ className: '', html: "📍" });
-						marker = L.marker([lat, lon], { icon });
-					}
-					marker.bindPopup(`<b>${name}</b><br>${lat}, ${lon}`).addTo(map);
-					markers.push(marker);
+	// load saved data
+	const saved = localStorage.getItem(STORAGE_KEY);
+	if (saved) {
+		try {
+			const obj = JSON.parse(saved);
+			points = obj.points || [];
+			lineScales = obj.lineScales || {};
+			SCALE = obj.SCALE || SCALE;
+		} catch (e) { console.warn('Failed to parse saved', e); }
+	}
+
+	renderAll();
+
+	// ======================
+	function renderAll() {
+		clearMap();
+		let latlngs = [];
+		const style = document.getElementById("markerStyle").value;
+
+		points.forEach(([lat, lon, name], i) => {
+			if (showMarkers) {
+				let marker;
+				if (style === "circle") {
+					marker = L.circleMarker([lat, lon], { radius: 6, color: 'blue', fillColor: 'cyan', fillOpacity: 0.8 });
+				} else if (style === "dot") {
+					marker = L.circleMarker([lat, lon], { radius: 3, color: 'black', fillColor: 'black', fillOpacity: 1 });
+				} else {
+					const icon = L.divIcon({ className: '', html: "📍" });
+					marker = L.marker([lat, lon], { icon });
 				}
-				latlngs.push([lat, lon]);
-			});
-
-			if (latlngs.length) map.fitBounds(latlngs);
-			if (showLines) drawLines(latlngs);
-			updateInfoList();
-			savePoints();
-		}
-
-		function drawLines(latlngs) {
-			clearLines();
-			for (let i = 0; i < latlngs.length - 1; i++) {
-				const p1 = latlngs[i], p2 = latlngs[i + 1];
-				const dist = getDistance(p1, p2);
-				const scaled = (dist / SCALE).toFixed(2);
-				const angle = getAngle(p1, p2);
-				const line = L.polyline([p1, p2], { color: 'blue' }).addTo(map);
-				lines.push(line);
-
-				// Label (hidden initially)
-				const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-				const label = L.marker(mid, {
-					icon: L.divIcon({
-						className: 'distance-label',
-						html: `<div>${dist.toFixed(2)} m<br>${scaled} cm<br>@${angle.toFixed(1)}°</div>`
-					}),
-					opacity: showLabels ? 0 : 0
-				}).addTo(map);
-				labels.push(label);
-
-				line.on('click', () => {
-					if (showLabels) {
-						label.setOpacity(label.options.opacity === 1 ? 0 : 1);
-					}
+				marker.addTo(map);
+				marker.bindPopup(`<b>${name}</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}`);
+				marker.on('click', () => {
+					// also show a temporary label at the point (more visible than popup)
+					showPointLabel(i);
 				});
+				markers.push(marker);
 			}
-			// Resultant (always shown)
-			if (latlngs.length > 2) {
-				const p1 = latlngs[0], p2 = latlngs[latlngs.length - 1];
-				const dist = getDistance(p1, p2);
-				const scaled = (dist / SCALE).toFixed(2);
-				const angle = getAngle(p1, p2);
-				const line = L.polyline([p1, p2], { color: 'red', dashArray: '5,5' }).addTo(map);
-				lines.push(line);
-				const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-				const label = L.marker(mid, {
-					icon: L.divIcon({
-						className: 'distance-label',
-						html: `<div><b>Resultant</b><br>${dist.toFixed(2)} m<br>${scaled} cm<br>@${angle.toFixed(1)}°</div>`
-					}),
-					opacity: 1
-				}).addTo(map);
-				labels.push(label);
-			}
-		}
+			latlngs.push([lat, lon]);
+		});
 
-		// ======================
-		function toggleVisibility(type) {
-			if (type === 'background') {
-				showBackground = !showBackground;
-				showBackground ? map.addLayer(mapLayer) : map.removeLayer(mapLayer);
-			} else if (type === 'lines') {
-				showLines = !showLines;
-				renderAll();
-			} else if (type === 'labels') {
-				showLabels = !showLabels;
-				renderAll();
-			} else if (type === 'markers') {
-				showMarkers = !showMarkers;
-				renderAll();
-			}
-		}
+		if (latlngs.length) map.fitBounds(latlngs);
+		if (showLines) drawLines(latlngs);
+		updateInfoList();
+		savePoints();
+	}
 
-		function getDistance(p1, p2) {
-			const R = 6371000;
-			const dLat = (p2[0] - p1[0]) * Math.PI / 180;
-			const dLon = (p2[1] - p1[1]) * Math.PI / 180;
-			const a = Math.sin(dLat / 2) ** 2 +
-				Math.cos(p1[0] * Math.PI / 180) * Math.cos(p2[0] * Math.PI / 180) *
-				Math.sin(dLon / 2) ** 2;
-			const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-			return R * c;
-		}
-		function getAngle(p1, p2) {
-			const dx = p2[1] - p1[1];
-			const dy = p2[0] - p1[0];
-			let deg = Math.atan2(dy, dx) * 180 / Math.PI;
-			if (deg < 0) deg += 360;
-			return deg;
-		}
+	function drawLines(latlngs) {
+		clearLines();
+		for (let i = 0; i < latlngs.length - 1; i++) {
+			const p1 = latlngs[i], p2 = latlngs[i + 1];
+			const dist = getDistance(p1, p2); // meters
+			const key = `${i}-${i+1}`;
+			const usedScale = lineScales[key] || SCALE;
+			const scaled = computeScaled(dist, usedScale);
+			const angle = getAngle(p1, p2);
 
-		function addPoint() {
-			const name = labelInput.value.trim() || nextLabel();
-			const lat = parseFloat(latInput.value);
-			const lon = parseFloat(lonInput.value);
-			if (isNaN(lat) || isNaN(lon)) return alert("Invalid coords.");
-			points.push([lat, lon, name]);
-			renderAll();
-		}
+			const line = L.polyline([p1, p2], { color: 'blue' }).addTo(map);
+			lines.push(line);
 
-		function nextLabel() {
-			const base = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-			const n = points.length % base.length;
-			return base[n];
-		}
+			const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+			const labelHtml = `<div><b>${points[i][2]} ➜ ${points[i+1][2]}</b><br>${dist.toFixed(2)} m<br>${scaled} cm (1cm = ${usedScale}m)<br>@${angle.toFixed(1)}°</div>`;
+			const label = L.marker(mid, {
+				icon: L.divIcon({ className: 'distance-label', html: labelHtml }),
+				opacity: showLabels ? 1 : 0
+			}).addTo(map);
+			labels.push(label);
 
-		function updateScale() {
-			const val = parseFloat(scaleInput.value);
-			if (!isNaN(val) && val > 0) { SCALE = val; renderAll(); }
-			else alert("Invalid scale.");
-		}
-		function resetAll() { if (confirm("Reset all?")) { points = []; renderAll(); } }
-		function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
-		function clearMap() { markers.forEach(m => m.remove()); markers = []; clearLines(); }
-		function clearLines() { lines.forEach(l => l.remove()); labels.forEach(lb => lb.remove()); lines = []; labels = []; }
-		function updateInfoList() {
-			let html = `<h3>Points</h3>`;
-			points.forEach(([lat, lon, name]) => {
-				html += `<div><b>${name}</b>: ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>`;
+			// click -> toggle label popup (also open a permanent popup at mid)
+			line.on('click', (e) => {
+				const popup = L.popup({autoClose:true, closeOnClick:true})
+					.setLatLng(mid)
+					.setContent(labelHtml)
+					.openOn(map);
+				// toggle icon visibility for the static label
+				const cur = label.options.opacity || 0;
+				label.setOpacity(cur === 1 ? 0 : 1);
 			});
-			infoList.innerHTML = html;
-		}
 
-		// 🖨️ Print
-		function showPrint() {
-			const wrapper = document.getElementById("printView");
-			let html = `<h2>Route Visualizer Printout</h2>
-				<p>Scale: 1cm = ${SCALE}m</p><hr><h3>Points</h3>`;
-			points.forEach(([lat, lon, name]) => {
-				html += `<div><b>${name}</b>: ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>`;
+			// double-click a line to set a custom scale for that segment
+			line.on('dblclick', () => {
+				const inp = prompt('Set custom scale for this segment (enter the number of meters that equals 1cm, e.g. 50). Leave blank to clear.');
+				if (inp === null) return; // cancelled
+				const v = parseFloat(inp);
+				if (!isNaN(v) && v > 0) {
+					lineScales[key] = v;
+					alert(`Custom scale set: 1cm = ${v} m for segment ${i}-${i+1}`);
+				} else {
+					// clear
+					delete lineScales[key];
+				}
+				renderAll();
 			});
-			html += `<hr><h3>Paths</h3>`;
-			for (let i = 0; i < points.length - 1; i++) {
-				const p1 = points[i], p2 = points[i + 1];
-				const dist = getDistance(p1, p2);
-				const scaled = (dist / SCALE).toFixed(2);
-				const ang = getAngle(p1, p2);
-				html += `<div>${p1[2]} ➜ ${p2[2]}: ${dist.toFixed(2)} m (${scaled} cm), ${ang.toFixed(1)}°</div>`;
-			}
-			if (points.length > 2) {
-				const p1 = points[0], p2 = points[points.length - 1];
-				const dist = getDistance(p1, p2);
-				const scaled = (dist / SCALE).toFixed(2);
-				const ang = getAngle(p1, p2);
-				html += `<div><b>Resultant:</b> ${p1[2]} ➜ ${p2[2]}: ${dist.toFixed(2)} m (${scaled} cm), ${ang.toFixed(1)}°</div>`;
-			}
-			html += `<hr><button onclick="window.print()">🖨️ Print Now</button>
-				<button onclick="exitPrint()">Exit</button>`;
-			document.body.classList.add("print-mode");
-			wrapper.innerHTML = html;
 		}
-		function exitPrint() { document.body.classList.remove("print-mode"); }
 
-		// 🎯 Tap-to-Plot
-		function startTapPlot() {
-			tapMode = true;
-			document.getElementById("panel").style.display = "none";
-			document.getElementById("tapPanel").style.display = "block";
-			map.on("click", onMapClick);
+		// Resultant (always shown if >2 points)
+		if (latlngs.length > 2) {
+			const p1 = latlngs[0], p2 = latlngs[latlngs.length - 1];
+			const dist = getDistance(p1, p2);
+			const usedScale = lineScales[`0-${latlngs.length-1}`] || SCALE;
+			const scaled = computeScaled(dist, usedScale);
+			const angle = getAngle(p1, p2);
+			const line = L.polyline([p1, p2], { color: 'red', dashArray: '5,5' }).addTo(map);
+			lines.push(line);
+			const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+			const labelHtml = `<div><b>Resultant</b><br>${dist.toFixed(2)} m<br>${scaled} cm (1cm = ${usedScale}m)<br>@${angle.toFixed(1)}°</div>`;
+			const label = L.marker(mid, { icon: L.divIcon({ className: 'distance-label', html: labelHtml }), opacity: 1 }).addTo(map);
+			labels.push(label);
+			line.on('click', () => L.popup().setLatLng(mid).setContent(labelHtml).openOn(map));
+			line.on('dblclick', () => {
+				const inp = prompt('Set custom scale for the resultant (1cm = ? m). Leave blank to clear.');
+				if (inp === null) return;
+				const v = parseFloat(inp);
+				if (!isNaN(v) && v > 0) {
+					lineScales[`0-${latlngs.length-1}`] = v;
+				} else delete lineScales[`0-${latlngs.length-1}`];
+				renderAll();
+			});
 		}
-		function finishTapPlot() {
-			tapMode = false;
-			document.getElementById("panel").style.display = "block";
-			document.getElementById("tapPanel").style.display = "none";
-			map.off("click", onMapClick);
+	}
+
+	// ======================
+	function toggleVisibility(type) {
+		if (type === 'background') {
+			showBackground = !showBackground;
+			showBackground ? map.addLayer(mapLayer) : map.removeLayer(mapLayer);
+		} else if (type === 'lines') {
+			showLines = !showLines;
+			renderAll();
+		} else if (type === 'labels') {
+			showLabels = !showLabels;
+			renderAll();
+		} else if (type === 'markers') {
+			showMarkers = !showMarkers;
 			renderAll();
 		}
-		function cancelTapPlot() {
-			tapMode = false;
-			document.getElementById("panel").style.display = "block";
-			document.getElementById("tapPanel").style.display = "none";
-			map.off("click", onMapClick);
+	}
+
+	function getDistance(p1, p2) {
+		const R = 6371000;
+		const dLat = (p2[0] - p1[0]) * Math.PI / 180;
+		const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+		const a = Math.sin(dLat / 2) ** 2 +
+			Math.cos(p1[0] * Math.PI / 180) * Math.cos(p2[0] * Math.PI / 180) *
+			Math.sin(dLon / 2) ** 2;
+		const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		return R * c;
+	}
+	function getAngle(p1, p2) {
+		const dx = p2[1] - p1[1];
+		const dy = p2[0] - p1[0];
+		let deg = Math.atan2(dy, dx) * 180 / Math.PI;
+		if (deg < 0) deg += 360;
+		return deg;
+	}
+
+	function computeScaled(distMeters, scaleValue) {
+		// returns scaled length in cm given: 1cm = scaleValue meters
+		return (distMeters / scaleValue).toFixed(2);
+	}
+
+	function addPoint() {
+		const name = labelInput.value.trim() || nextLabel();
+		const lat = parseFloat(latInput.value);
+		const lon = parseFloat(lonInput.value);
+		if (isNaN(lat) || isNaN(lon)) return alert("Invalid coords.");
+		points.push([lat, lon, name]);
+		renderAll();
+	}
+
+	function nextLabel() {
+		const base = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		const n = points.length % base.length;
+		return base[n];
+	}
+
+	function updateScale() {
+		const val = parseFloat(scaleInput.value);
+		if (!isNaN(val) && val > 0) { SCALE = val; renderAll(); }
+		else alert("Invalid scale.");
+	}
+	function resetAll() { if (confirm("Reset all?")) { points = []; lineScales = {}; renderAll(); } }
+	function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ points, lineScales, SCALE })); }
+	function clearMap() { markers.forEach(m => m.remove()); markers = []; clearLines(); pointLabels.forEach(pl => pl.remove()); pointLabels = []; }
+	function clearLines() { lines.forEach(l => l.remove()); labels.forEach(lb => lb.remove()); lines = []; labels = []; }
+	function updateInfoList() {
+		let html = `<h3>Points</h3>`;
+		points.forEach(([lat, lon, name], i) => {
+			html += `<div><b>${name}</b>: ${lat.toFixed(6)}, ${lon.toFixed(6)} <button onclick="zoomTo(${i})">Zoom</button></div>`;
+		});
+		document.getElementById('infoList').innerHTML = html;
+	}
+
+	function zoomTo(i) {
+		const p = points[i];
+		map.setView([p[0], p[1]], 17);
+		markers[i] && markers[i].openPopup();
+	}
+
+	// 🖨️ Print
+	function showPrint() {
+		const wrapper = document.getElementById("printView");
+		let html = `<h2>Route Visualizer Printout</h2><p>Scale: 1cm = ${SCALE}m</p><hr><h3>Points</h3>`;
+		points.forEach(([lat, lon, name]) => {
+			html += `<div><b>${name}</b>: ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>`;
+		});
+		html += `<hr><h3>Paths</h3>`;
+		for (let i = 0; i < points.length - 1; i++) {
+			const p1 = points[i], p2 = points[i + 1];
+			const dist = getDistance(p1, p2);
+			const usedScale = lineScales[`${i}-${i+1}`] || SCALE;
+			const scaled = computeScaled(dist, usedScale);
+			const ang = getAngle(p1, p2);
+			html += `<div>${p1[2]} ➜ ${p2[2]}: ${dist.toFixed(2)} m (${scaled} cm, 1cm=${usedScale}m), ${ang.toFixed(1)}°</div>`;
 		}
-		function onMapClick(e) {
-			const { lat, lng } = e.latlng;
-			const popup = L.popup()
-				.setLatLng(e.latlng)
-				.setContent(`<b>Add point here?</b><br>
-					<button onclick="confirmTap(${lat},${lng})">Yes</button>`)
-				.openOn(map);
+		if (points.length > 2) {
+			const p1 = points[0], p2 = points[points.length - 1];
+			const dist = getDistance(p1, p2);
+			const usedScale = lineScales[`0-${points.length-1}`] || SCALE;
+			const scaled = computeScaled(dist, usedScale);
+			const ang = getAngle(p1, p2);
+			html += `<div><b>Resultant:</b> ${p1[2]} ➜ ${p2[2]}: ${dist.toFixed(2)} m (${scaled} cm, 1cm=${usedScale}m), ${ang.toFixed(1)}°</div>`;
 		}
-		function confirmTap(lat, lng) {
-			points.push([lat, lng, nextLabel()]);
-			map.closePopup();
-			renderAll();
+		html += `<hr><button onclick="window.print()">🖨️ Print Now</button><button onclick="exitPrint()">Exit</button>`;
+		document.body.classList.add("print-mode");
+		wrapper.innerHTML = html;
+	}
+	function exitPrint() { document.body.classList.remove("print-mode"); }
+
+	// 🎯 Tap-to-Plot
+	function startTapPlot() {
+		tapMode = true;
+		document.getElementById("panel").style.display = "none";
+		document.getElementById("tapPanel").style.display = "block";
+		map.on("click", onMapClick);
+	}
+	function finishTapPlot() {
+		tapMode = false;
+		document.getElementById("panel").style.display = "block";
+		document.getElementById("tapPanel").style.display = "none";
+		map.off("click", onMapClick);
+		renderAll();
+	}
+	function cancelTapPlot() {
+		tapMode = false;
+		document.getElementById("panel").style.display = "block";
+		document.getElementById("tapPanel").style.display = "none";
+		map.off("click", onMapClick);
+	}
+	function onMapClick(e) {
+		const { lat, lng } = e.latlng;
+		const popup = L.popup()
+			.setLatLng(e.latlng)
+			.setContent(`<b>Add point here?</b><br><button onclick="confirmTap(${lat},${lng})">Yes</button>`) 
+			.openOn(map);
+	}
+	function confirmTap(lat, lng) {
+		points.push([lat, lng, nextLabel()]);
+		map.closePopup();
+		renderAll();
+	}
+
+	function showPointLabel(i) {
+		// create a temporary label beside the marker showing coords
+		const [lat, lon, name] = points[i];
+		const html = `<div><b>${name}</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}</div>`;
+		const label = L.marker([lat, lon], { icon: L.divIcon({ className: 'distance-label', html }), interactive: false }).addTo(map);
+		pointLabels.push(label);
+		// auto remove after 4 seconds
+		setTimeout(() => { label.remove(); pointLabels = pointLabels.filter(x=>x!==label); }, 4000);
+	}
+
+	// ======================
+	function toggleMap() {
+		document.getElementById('map').classList.toggle('hidden-map');
+	}
+
+	// Minimize logic: cycle between full -> main -> hamburger
+	function cycleMinimizeMode() {
+		minimizeMode = (minimizeMode + 1) % 3;
+		const panel = document.getElementById('panel');
+		const hb = document.getElementById('hamburgerBtn');
+		panel.classList.remove('panel-full','panel-main','panel-hamburger');
+		hb.classList.remove('show');
+		if (minimizeMode === 0) { // full
+			panel.classList.add('panel-full');
+			panel.style.display = 'block';
+			hb.style.display = 'none';
+		} else if (minimizeMode === 1) { // main
+			panel.classList.add('panel-main');
+			panel.style.display = 'block';
+			hb.style.display = 'none';
+		} else { // hamburger only
+			panel.classList.add('panel-hamburger');
+			panel.style.display = 'none';
+			hb.classList.add('show');
 		}
-	</script>
+	}
+	// hamburger click opens panel in full mode (temporary)
+	document.getElementById('hamburgerBtn').addEventListener('click', () => {
+		minimizeMode = 0; // set to full
+		cycleMinimizeMode();
+	});
+
+	// initial button references (for inputs)
+	const scaleInput = document.getElementById('scaleInput');
+	const labelInput = document.getElementById('labelInput');
+	const latInput = document.getElementById('latInput');
+	const lonInput = document.getElementById('lonInput');
+
+	// Expose some functions to global so inline onclicks work
+	window.addPoint = addPoint;
+	window.startTapPlot = startTapPlot;
+	window.finishTapPlot = finishTapPlot;
+	window.cancelTapPlot = cancelTapPlot;
+	window.confirmTap = confirmTap;
+	window.resetAll = resetAll;
+	window.updateScale = updateScale;
+	window.toggleVisibility = toggleVisibility;
+	window.showPrint = showPrint;
+	window.exitPrint = exitPrint;
+	window.cycleMinimizeMode = cycleMinimizeMode;
+	window.zoomTo = zoomTo;
+
+</script>
+
 </body>
 </html>
