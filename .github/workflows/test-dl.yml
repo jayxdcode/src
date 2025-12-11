@@ -7,10 +7,15 @@ on:
         description: 'Target URL to open (overrides default in script)'
         required: false
         default: 'https://y2mate.nu/ysM1/#SIvh2pRDoeY'
+  push:
+    branches: [ main ]
 
 jobs:
   run-download-script:
     runs-on: ubuntu-latest
+    env:
+      # Make Firefox as headless as possible
+      MOZ_HEADLESS: "1"
 
     steps:
       - name: Check out repository
@@ -21,211 +26,215 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Firefox + Xvfb + libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox xvfb
+          # Firefox + Xvfb + unzip + useful libs for Firefox to run on CI
+          sudo apt-get install -y firefox xvfb unzip \
+            libgtk-3-0 libdbus-glib-1-2 libdbus-1-3 libgconf-2-4 \
+            libasound2 fonts-liberation libnss3 libxss1 libxtst6
           python -m pip install --upgrade pip
           pip install selenium webdriver-manager
 
-      - name: Create and run embedded Python script
+      - name: Create and run embedded Python script under Xvfb
         env:
           TARGET_URL: ${{ github.event.inputs.target_url }}
         run: |
+          # Write the script file
           cat > download_firefox_mutation.py <<'PY'
-          #!/usr/bin/env python3
-          """
-          download_firefox_mutation.py
+#!/usr/bin/env python3
+"""
+Embedded script used by the GitHub Action.
+It uses webdriver-manager to download geckodriver, runs Firefox (headless),
+injects a MutationObserver to wait for a "Download" element, clicks it and
+waits for a file to appear in ./downloads.
+"""
+import os, sys, time, traceback
+from pathlib import Path
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium.webdriver.firefox.options import Options
 
-          Uses Selenium + Firefox (geckodriver) and injects a MutationObserver to wait             
-          for a "Download" element that appears asynchronously, then clicks it and waits
-          for a file to appear in the download folder.                                             
+# ---------- CONFIG ----------
+TARGET_URL = os.environ.get('TARGET_URL') or (sys.argv[1] if len(sys.argv) > 1 else "https://example.com")
+DOWNLOAD_DIR = str(Path.cwd() / "downloads")
+HEADLESS = True
+POLL_TIMEOUT_SECONDS = 30
+DOWNLOAD_WAIT_TIMEOUT = 60
+MIME_TYPES = (
+    "application/octet-stream,"
+    "application/zip,application/pdf,application/x-rar-compressed,"
+    "application/x-7z-compressed,application/vnd.android.package-archive,"
+    "application/vnd.ms-excel,application/msword,application/vnd.ms-powerpoint,"
+    "image/jpeg,image/png,video/mp4,audio/mpeg"
+)
+# ----------------------------
 
-          Adjust TARGET_URL, DOWNLOAD_DIR, MIME_TYPES if needed.
-          """
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-          import os
-          import sys
-          import time
-          from pathlib import Path
-          from selenium import webdriver
-          from selenium.webdriver.common.by import By
-          from selenium.webdriver.firefox.service import Service
-          from webdriver_manager.firefox import GeckoDriverManager
-          from selenium.webdriver.firefox.options import Options
+opts = Options()
+if HEADLESS:
+    # explicit headless mode (also MOZ_HEADLESS env var is set by the workflow)
+    opts.headless = True
 
-          # ---------- CONFIG ----------
-          TARGET_URL = os.environ.get('TARGET_URL') or (sys.argv[1] if len(sys.argv) > 1 else "https://example.com")
-          DOWNLOAD_DIR = str(Path.cwd() / "downloads")
-          HEADLESS = True                # set False to see browser
-          POLL_TIMEOUT_SECONDS = 30      # how long MutationObserver will wait for button
-          DOWNLOAD_WAIT_TIMEOUT = 60     # how long to wait for new file after clicking
-          # MIME types that will be auto-saved without asking (add more if needed)
-          MIME_TYPES = (
-              "application/octet-stream,"
-              "application/zip,application/pdf,application/x-rar-compressed,"
-              "application/x-7z-compressed,application/vnd.android.package-archive,"
-              "application/vnd.ms-excel,application/msword,application/vnd.ms-powerpoint,"
-              "image/jpeg,image/png,video/mp4,audio/mpeg"
-          )                                                                
-          # ----------------------------
+# Download preferences
+opts.set_preference("browser.download.folderList", 2)
+opts.set_preference("browser.download.dir", DOWNLOAD_DIR)
+opts.set_preference("browser.download.useDownloadDir", True)
+opts.set_preference("browser.helperApps.neverAsk.saveToDisk", MIME_TYPES)
+opts.set_preference("pdfjs.disabled", True)
+opts.set_preference("browser.download.manager.showWhenStarting", False)
+opts.set_preference("browser.download.manager.focusWhenStarting", False)
+opts.set_preference("browser.download.manager.alertOnEXEOpen", False)
+opts.set_preference("browser.download.manager.closeWhenDone", True)
+opts.set_preference("browser.download.manager.showAlertOnComplete", False)
 
-          os.makedirs(DOWNLOAD_DIR, exist_ok=True)                                                 
+# Let webdriver-manager download geckodriver for us
+gecko_path = GeckoDriverManager().install()
+# Start geckodriver and set a log path for debugging if needed
+service = Service(gecko_path, log_path=str(Path.cwd() / "geckodriver.log"))
 
-          opts = Options()
-          if HEADLESS:                                                                             
-              opts.headless = True
+driver = None
 
-          # Set Firefox prefs for automatic download
-          opts.set_preference("browser.download.folderList", 2)  # use custom location             
-          opts.set_preference("browser.download.dir", DOWNLOAD_DIR)
-          opts.set_preference("browser.download.useDownloadDir", True)
-          opts.set_preference("browser.helperApps.neverAsk.saveToDisk", MIME_TYPES)                
-          opts.set_preference("pdfjs.disabled", True)  # disable built-in PDF viewer
-          opts.set_preference("browser.download.manager.showWhenStarting", False)
-          opts.set_preference("browser.download.manager.focusWhenStarting", False)                 
-          opts.set_preference("browser.download.manager.alertOnEXEOpen", False)
-          opts.set_preference("browser.download.manager.closeWhenDone", True)
-          opts.set_preference("browser.download.manager.showAlertOnComplete", False)
+def snapshot_dir(path):
+    return set(p for p in os.listdir(path))
 
-          service = Service(GeckoDriverManager().install())
-          driver = webdriver.Firefox(service=service, options=opts)
+def wait_for_new_file(before_set, timeout=DOWNLOAD_WAIT_TIMEOUT):
+    end = time.time() + timeout
+    while time.time() < end:
+        now = snapshot_dir(DOWNLOAD_DIR)
+        added = now - before_set
+        if added:
+            return list(added)
+        time.sleep(0.5)
+    return []
 
-          def snapshot_dir(path):
-              return set(p for p in os.listdir(path))
+try:
+    print("[INFO] geckodriver path:", gecko_path)
+    driver = webdriver.Firefox(service=service, options=opts)
+    print("[INFO] Opening:", TARGET_URL)
+    driver.get(TARGET_URL)
 
-          def wait_for_new_file(before_set, timeout=DOWNLOAD_WAIT_TIMEOUT):
-              """Wait for a new file to appear in DOWNLOAD_DIR."""
-              end = time.time() + timeout
-              while time.time() < end:
-                  now = snapshot_dir(DOWNLOAD_DIR)
-                  added = now - before_set
-                  if added:
-                      # return the newest added file (there could be multiple)
-                      return list(added)
-                  time.sleep(0.5)
-              return []
+    before = snapshot_dir(DOWNLOAD_DIR)
+    print(f"[INFO] Watching downloads folder: {DOWNLOAD_DIR} (contains {len(before)} files)")
 
-          try:
-              print("[INFO] Opening:", TARGET_URL)
-              driver.get(TARGET_URL)
+    async_script = f\"\"\"
+    var callback = arguments[arguments.length - 1];
+    var timeout = {int(POLL_TIMEOUT_SECONDS * 1000)};
+    var textRe = /download/i;
 
-              # initial snapshot of downloads folder
-              before = snapshot_dir(DOWNLOAD_DIR)
-              print(f"[INFO] Watching downloads folder: {DOWNLOAD_DIR} (contains {len(before)} files)")
+    function matchesDownload(node) {{
+        if (!node) return null;
+        var tag = node.tagName && node.tagName.toLowerCase();
+        var allowed = ['a','button','input','div','span','label'];
+        if (allowed.indexOf(tag) === -1) return null;
+        var txt = (node.innerText || node.value || '').trim();
+        if (textRe.test(txt)) return node;
+        var aria = node.getAttribute && (node.getAttribute('aria-label') || node.getAttribute('title') || node.getAttribute('data-title'));
+        if (aria && textRe.test(aria)) return node;
+        var dh = node.getAttribute && (node.getAttribute('data-href') || node.getAttribute('data-url'));
+        if (dh && textRe.test(txt)) return node;
+        return null;
+    }}
 
-              # inject MutationObserver to wait for element with text "Download" (case-insensitive)
-              # When found it will click it and return an object describing the result.
-              async_script = f"""
-              var callback = arguments[arguments.length - 1];
-              var timeout = {int(POLL_TIMEOUT_SECONDS * 1000)};
-              var textRe = /download/i;
+    function scanAll() {{
+        var all = document.querySelectorAll('a,button,input,div,span,label');
+        for (var i=0;i<all.length;i++) {{
+            var n = all[i];
+            var f = matchesDownload(n);
+            if (f) return f;
+        }}
+        return null;
+    }}
 
-              function matchesDownload(node) {{
-                  if (!node) return null;
-                  var tag = node.tagName && node.tagName.toLowerCase();
-                  var allowed = ['a','button','input','div','span','label'];
-                  if (allowed.indexOf(tag) === -1) return null;
-                  var txt = (node.innerText || node.value || '').trim();
-                  if (textRe.test(txt)) return node;
-                  var aria = node.getAttribute && (node.getAttribute('aria-label') || node.getAttribute('title') || node.getAttribute('data-title'));
-                  if (aria && textRe.test(aria)) return node;
-                  // data-href / data-url attribute
-                  var dh = node.getAttribute && (node.getAttribute('data-href') || node.getAttribute('data-url'));
-                  if (dh && textRe.test(txt)) return node;
-                  return null;
-              }}
+    var found = scanAll();
+    if (found) {{
+        try {{ found.click(); callback({{'status':'clicked','tag':found.tagName}}); }} 
+        catch(e) {{ try {{ found.dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true}})); callback({{'status':'clicked_via_event','err':String(e)}}); }} catch(e2) {{ callback({{'status':'error','err':String(e2)}}); }} }}
+        return;
+    }}
 
-              function scanAll() {{
-                  var all = document.querySelectorAll('a,button,input,div,span,label');
-                  for (var i=0;i<all.length;i++) {{
-                      var n = all[i];
-                      var f = matchesDownload(n);
-                      if (f) return f;
-                  }}
-                  return null;
-              }}
+    var observer = new MutationObserver(function(muts) {{
+        for (var m of muts) {{
+            for (var n of m.addedNodes) {{
+                if (!(n instanceof HTMLElement)) continue;
+                var f = matchesDownload(n) || (n.querySelector && matchesDownload(n.querySelector('a,button,input,div,span,label')));
+                if (f) {{
+                    observer.disconnect();
+                    try {{ f.click(); callback({{'status':'clicked','tag':f.tagName}}); }} 
+                    catch(e) {{ try {{ f.dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true}})); callback({{'status':'clicked_via_event','err':String(e)}}); }} catch(e2) {{ callback({{'status':'error','err':String(e2)}}); }} }}
+                    return;
+                }}
+            }}
+        }}
+    }});
 
-              var found = scanAll();
-              if (found) {{
-                  try {{ found.click(); callback({{'status':'clicked','tag':found.tagName}}); }}
-                  catch(e) {{ try {{ found.dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true}})); callback({{'status':'clicked_via_event','err':String(e)}}); }} catch(e2) {{ callback({{'status':'error','err':String(e2)}}); }} }}
-                  return;
-              }}
+    observer.observe(document.body || document.documentElement, {{childList:true, subtree:true}});
 
-              var observer = new MutationObserver(function(muts) {{
-                  for (var m of muts) {{
-                      for (var n of m.addedNodes) {{
-                          if (!(n instanceof HTMLElement)) continue;
-                          var f = matchesDownload(n) || (n.querySelector && matchesDownload(n.querySelector('a,button,input,div,span,label')));
-                          if (f) {{
-                              observer.disconnect();
-                              try {{ f.click(); callback({{'status':'clicked','tag':f.tagName}}); }}
-                              catch(e) {{ try {{ f.dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true}})); callback({{'status':'clicked_via_event','err':String(e)}}); }} catch(e2) {{ callback({{'status':'error','err':String(e2)}}); }} }}
-                              return;
-                          }}
-                      }}
-                  }}
-              }});
+    setTimeout(function() {{
+        observer.disconnect();
+        callback({{'status':'timeout'}});
+    }}, timeout);
+    \"\"\"
 
-              observer.observe(document.body || document.documentElement, {{childList:true, subtree:true}});
+    print(f\"[INFO] Waiting up to {POLL_TIMEOUT_SECONDS}s for Download button to appear (MutationObserver)...\")
+    result = driver.execute_async_script(async_script)
+    print("[INFO] Observer result:", result)
 
-              setTimeout(function() {{
-                  observer.disconnect();
-                  callback({{'status':'timeout'}});
-              }}, timeout);
-              """
+    if result.get("status") in ("clicked", "clicked_via_event", "clicked_via_js"):
+        print("[INFO] Click executed — waiting for file to appear...")
+        added_files = wait_for_new_file(before, timeout=DOWNLOAD_WAIT_TIMEOUT)
+        if added_files:
+            for fname in added_files:
+                full = os.path.join(DOWNLOAD_DIR, fname)
+                print(f"[SUCCESS] New file detected: {full}")
+        else:
+            print("[WARN] Clicked but no new file detected within timeout. The download may be handled differently.")
+    elif result.get("status") == "timeout":
+        print("[ERROR] Timeout: no element with text 'Download' appeared within the wait period.")
+        # Fallback: attempt to find links/buttons via XPath (case-insensitive)
+        xpath = ("//a[contains(translate(normalize-space(string(.)), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
+                 "|//button[contains(translate(normalize-space(string(.)), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
+                 "|//input[contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]")
+        try:
+            el = driver.find_element(By.XPATH, xpath)
+            print("[INFO] Found element with fallback XPath, attempting native click...")
+            el.click()
+            added_files = wait_for_new_file(before, timeout=DOWNLOAD_WAIT_TIMEOUT)
+            if added_files:
+                for fname in added_files:
+                    print(f"[SUCCESS] New file detected: {os.path.join(DOWNLOAD_DIR, fname)}")
+            else:
+                print("[WARN] Fallback click did not produce a file within timeout.")
+        except Exception as e:
+            print("[ERROR] Fallback failed:", e)
+    else:
+        print("[ERROR] Observer returned unexpected result:", result)
 
-              print(f"[INFO] Waiting up to {POLL_TIMEOUT_SECONDS}s for Download button to appear (MutationObserver)...")
-              result = driver.execute_async_script(async_script)
-              print("[INFO] Observer result:", result)
+except Exception:
+    traceback.print_exc()
+    print("[INFO] If geckodriver produced logs, show the last 200 lines below for debugging:")
+    try:
+        with open("geckodriver.log","r",encoding="utf-8",errors="ignore") as f:
+            lines = f.read().splitlines()
+            for ln in lines[-200:]:
+                print(ln)
+    except Exception as e:
+        print("[INFO] Could not read geckodriver.log:", e)
+finally:
+    try:
+        if driver:
+            driver.quit()
+    except Exception:
+        pass
+PY
 
-              if result.get("status") in ("clicked", "clicked_via_event", "clicked_via_js"):
-                  print("[INFO] Click executed — waiting for file to appear...")
-                  added_files = wait_for_new_file(before, timeout=DOWNLOAD_WAIT_TIMEOUT)
-                  if added_files:
-                      for fname in added_files:
-                          full = os.path.join(DOWNLOAD_DIR, fname)
-                          print(f"[SUCCESS] New file detected: {full}")
-                  else:
-                      print("[WARN] Clicked but no new file detected within timeout. The download may be handled differently (e.g., streamed in-page or requires additional headers).")
-              elif result.get("status") == "timeout":
-                  print("[ERROR] Timeout: no element with text 'Download' appeared within the wait period.")
-                  # Fallback: attempt to find links/buttons via XPath (case-insensitive)
-                  print("[INFO] Trying fallback: find clickable elements with XPath...")
-                  xpath = ("//a[contains(translate(normalize-space(string(.)), "
-                           "'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
-                           "|//button[contains(translate(normalize-space(string(.)), "
-                           "'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
-                           "|//input[contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]")
-                  try:
-                      el = driver.find_element(By.XPATH, xpath)
-                      print("[INFO] Found element with fallback XPath, attempting native click...")
-                      el.click()
-                      added_files = wait_for_new_file(before, timeout=DOWNLOAD_WAIT_TIMEOUT)
-                      if added_files:
-                          for fname in added_files:
-                              print(f"[SUCCESS] New file detected: {os.path.join(DOWNLOAD_DIR, fname)}")
-                      else:
-                          print("[WARN] Fallback click did not produce a file within timeout.")
-                  except Exception as e:
-                      print("[ERROR] Fallback failed:", e)
-              else:
-                  print("[ERROR] Observer returned unexpected result:", result)
-
-          finally:
-              driver.quit()
-          PY
-
-          # make the script executable
           chmod +x download_firefox_mutation.py
 
-          # Start a virtual framebuffer (Xvfb) so Firefox can run headless in this runner
-          Xvfb :99 -screen 0 1024x768x24 &
-          sleep 1
-
-          # Run the script; the TARGET_URL env var will override the default
-          python download_firefox_mutation.py "$TARGET_URL"
+          # Run under xvfb-run to ensure a working DISPLAY (xvfb-run -a chooses an available :N)
+          xvfb-run -a python download_firefox_mutation.py "$TARGET_URL"
 
       - name: Upload downloads as artifact
         uses: actions/upload-artifact@v4
