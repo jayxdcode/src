@@ -7,8 +7,6 @@ on:
         description: 'Target URL to open (overrides default in script)'
         required: false
         default: 'https://y2mate.nu/ysM1/#SIvh2pRDoeY'
-  push:
-    branches: [ main ]
 
 jobs:
   run-download-script:
