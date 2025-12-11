@@ -25,12 +25,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install system dependencies (Firefox + Xvfb + libs)
+      - name: Install system dependencies (Firefox + libs)
         run: |
           sudo apt-get update
-          sudo apt-get install -y firefox xvfb unzip \
-            libgtk-3-0 libdbus-glib-1-2 libdbus-1-3 libgconf-2-4 \
-            libasound2 fonts-liberation libnss3 libxss1 libxtst6
+          sudo apt-get install -y --no-install-recommends \
+            firefox unzip \
+            libgtk-3-0 libdbus-1-3 \
+            fonts-liberation ca-certificates \
+            libnss3 libxss1 libxtst6
           python -m pip install --upgrade pip
           pip install selenium webdriver-manager
 
@@ -231,7 +233,7 @@ jobs:
           PY
 
           chmod +x download_firefox_mutation.py
-          xvfb-run -a python download_firefox_mutation.py "${TARGET_URL:-https://y2mate.nu/ysM1/#SIvh2pRDoeY}"
+          python download_firefox_mutation.py "${TARGET_URL:-https://y2mate.nu/ysM1/#SIvh2pRDoeY}"
 
       - name: Upload downloads as artifact
         uses: actions/upload-artifact@v4
