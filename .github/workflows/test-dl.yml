@@ -14,7 +14,6 @@ jobs:
   run-download-script:
     runs-on: ubuntu-latest
     env:
-      # Make Firefox as headless as possible
       MOZ_HEADLESS: "1"
 
     steps:
@@ -29,7 +28,6 @@ jobs:
       - name: Install system dependencies (Firefox + Xvfb + libs)
         run: |
           sudo apt-get update
-          # Firefox + Xvfb + unzip + useful libs for Firefox to run on CI
           sudo apt-get install -y firefox xvfb unzip \
             libgtk-3-0 libdbus-glib-1-2 libdbus-1-3 libgconf-2-4 \
             libasound2 fonts-liberation libnss3 libxss1 libxtst6
@@ -40,7 +38,6 @@ jobs:
         env:
           TARGET_URL: ${{ github.event.inputs.target_url }}
         run: |
-          # Write the script file
           cat > download_firefox_mutation.py <<'PY'
 #!/usr/bin/env python3
 """
@@ -76,8 +73,12 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 opts = Options()
 if HEADLESS:
-    # explicit headless mode (also MOZ_HEADLESS env var is set by the workflow)
     opts.headless = True
+
+# Additional CI-safe flags
+opts.add_argument("--no-sandbox")
+opts.add_argument("--disable-gpu")
+opts.add_argument("--disable-dev-shm-usage")
 
 # Download preferences
 opts.set_preference("browser.download.folderList", 2)
@@ -91,9 +92,8 @@ opts.set_preference("browser.download.manager.alertOnEXEOpen", False)
 opts.set_preference("browser.download.manager.closeWhenDone", True)
 opts.set_preference("browser.download.manager.showAlertOnComplete", False)
 
-# Let webdriver-manager download geckodriver for us
+# Let webdriver-manager download geckodriver
 gecko_path = GeckoDriverManager().install()
-# Start geckodriver and set a log path for debugging if needed
 service = Service(gecko_path, log_path=str(Path.cwd() / "geckodriver.log"))
 
 driver = None
@@ -120,7 +120,7 @@ try:
     before = snapshot_dir(DOWNLOAD_DIR)
     print(f"[INFO] Watching downloads folder: {DOWNLOAD_DIR} (contains {len(before)} files)")
 
-    async_script = f\"\"\"
+    async_script = f"""
     var callback = arguments[arguments.length - 1];
     var timeout = {int(POLL_TIMEOUT_SECONDS * 1000)};
     var textRe = /download/i;
@@ -177,9 +177,9 @@ try:
         observer.disconnect();
         callback({{'status':'timeout'}});
     }}, timeout);
-    \"\"\"
+    """
 
-    print(f\"[INFO] Waiting up to {POLL_TIMEOUT_SECONDS}s for Download button to appear (MutationObserver)...\")
+    print(f"[INFO] Waiting up to {POLL_TIMEOUT_SECONDS}s for Download button to appear (MutationObserver)...")
     result = driver.execute_async_script(async_script)
     print("[INFO] Observer result:", result)
 
@@ -191,10 +191,9 @@ try:
                 full = os.path.join(DOWNLOAD_DIR, fname)
                 print(f"[SUCCESS] New file detected: {full}")
         else:
-            print("[WARN] Clicked but no new file detected within timeout. The download may be handled differently.")
+            print("[WARN] Clicked but no new file detected within timeout.")
     elif result.get("status") == "timeout":
         print("[ERROR] Timeout: no element with text 'Download' appeared within the wait period.")
-        # Fallback: attempt to find links/buttons via XPath (case-insensitive)
         xpath = ("//a[contains(translate(normalize-space(string(.)), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
                  "|//button[contains(translate(normalize-space(string(.)), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]"
                  "|//input[contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]")
@@ -232,9 +231,7 @@ finally:
 PY
 
           chmod +x download_firefox_mutation.py
-
-          # Run under xvfb-run to ensure a working DISPLAY (xvfb-run -a chooses an available :N)
-          xvfb-run -a python download_firefox_mutation.py "$TARGET_URL"
+          xvfb-run -a python download_firefox_mutation.py "${TARGET_URL:-https://y2mate.nu/ysM1/#SIvh2pRDoeY}"
 
       - name: Upload downloads as artifact
         uses: actions/upload-artifact@v4
