@@ -37,8 +37,7 @@ jobs:
       - name: Create and run embedded Python script under Xvfb
         env:
           TARGET_URL: ${{ github.event.inputs.target_url }}
-        run: |
-          chmod +x p.py
+        run:
           python p.py "${TARGET_URL:-https://y2mate.nu/ysM1/#SIvh2pRDoeY}"
 
       - name: Upload downloads as artifact
